@@ -1,0 +1,24 @@
+# Virtual Environment
+venv/
+ENV/
+env/
+backend_env/
+# Node dependencies & Next.js builds
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# Environment variables & secrets (CRITICAL!)
+.env
+.env.local
+*.env
+
+# Python cache & logs
+__pycache__/
+*.py[cod]
+*.log
+.pm2/
+
+# OS generated files
+.DS_Store
+Thumbs.db
