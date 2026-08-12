@@ -7,3 +7,5 @@ chromadb
 requests 
 pydantic 
 python-dotenv
+pymongo[srv]==4.6.3
+dnspython==2.6.1

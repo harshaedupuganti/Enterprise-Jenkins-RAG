@@ -5,7 +5,7 @@ from langchain_openai import AzureChatOpenAI
 from langchain_core.tools import tool
 from langchain.agents import create_agent
 from backend.jenkins_client import fetch_jenkins_nodes
-
+from langchain.tools import tool
 # Load environment configuration
 load_dotenv()
 
@@ -18,7 +18,75 @@ llm = AzureChatOpenAI(
     temperature=0
 )
 
+from .mongo_cbt_client import (
+    search_by_build_number, 
+    get_latest_report_for_project, 
+    get_summary_last_24h,
+    search_deep_metric
+)
 # 2. Universal Real-Time Data Pipeline Tool
+
+def _format_tool_response(payload: dict) -> str:
+    if not payload:
+        return json.dumps({"error": "No matching CBT report found."})
+    if "error" in payload:
+        return json.dumps(payload)
+    if "testcases" in payload and isinstance(payload["testcases"], list):
+        if len(payload["testcases"]) > 30:
+            payload["testcases"] = payload["testcases"][:30]
+            payload["_note"] = "Response truncated. Ask for specific testcases by name for more detail."
+    response_str = json.dumps(payload, default=str)
+    if len(response_str) > 8000:
+        if "testcases" in payload:
+            payload["testcases"] = []
+            payload["_note"] = "Response heavily truncated due to strict length limits. Ask for specific testcases."
+            response_str = json.dumps(payload, default=str)
+    return response_str
+
+@tool
+def get_cbt_report_by_build_number(build_number: str) -> str:
+    """
+    Fetches a specific CBT test report from MongoDB by its BMS build number.
+    Use this when the user mentions a specific build number.
+    Returns: project identity, build metadata, overall result, test bench, 
+             runtime, and a summary of all testcase results.
+    """
+    data = search_by_build_number(build_number)
+    return _format_tool_response(data)
+
+@tool
+def get_latest_cbt_report_for_project(project_name: str) -> str:
+    """
+    Fetches the most recent CBT test report for a given project name from MongoDB.
+    Use this when the user asks about a project without specifying a build number.
+    Also useful for trend analysis — call multiple times with different project names.
+    Returns: latest build metadata, result, test duration, testcase pass/fail summary.
+    """
+    data = get_latest_report_for_project(project_name)
+    return _format_tool_response(data)
+
+@tool
+def get_cbt_build_summary_last_24h() -> str:
+    """
+    Returns aggregated statistics of all CBT builds from the last 24 hours.
+    Use this for questions like: how many builds ran today, what is the failure rate,
+    which projects had failures, overall health of the test infrastructure.
+    """
+    data = get_summary_last_24h()
+    return json.dumps(data, default=str)[:8000]
+
+@tool
+def get_cbt_deep_metric(build_number: str, metric_query: str) -> str:
+    """
+    Use this tool when the user asks for specific nested values inside a CBT report,
+    such as 'CPU load', 'Power consumption', 'Current', 'Voltage', 'Sleep time', 'Startup time', 
+    'DTCs', or any other specific tabular/text data from the test steps.
+    - build_number: The specific build number (e.g. '1447833')
+    - metric_query: A short 1-3 word keyword search (e.g., 'cpu load', 'sleep', 'power')
+    """
+    data = search_deep_metric(build_number, metric_query)
+    return _format_tool_response(data)
+
 @tool
 def get_live_jenkins_inventory() -> str:
     """
@@ -82,19 +150,51 @@ def get_live_jenkins_inventory() -> str:
     return json.dumps(payload, indent=2)
 
 # Register Tool
-tools = [get_live_jenkins_inventory]
+tools = [
+    get_live_jenkins_inventory, 
+    get_cbt_report_by_build_number, 
+    get_latest_cbt_report_for_project, 
+    get_cbt_build_summary_last_24h,
+    get_cbt_deep_metric
+]
 
 # 3. ABSOLUTE SYSTEM OVERRIDE (State Modifier)
 # This replaces the manual chat_history insertion and creates a permanent jail.
-system_override = """You are a highly restricted Enterprise IT Assistant managing Jenkins infrastructure.
-You have ONE tool: get_live_jenkins_inventory. This tool returns EXACT statuses including 'Idle', 'Busy', 'Offline', and 'Temporarily Offline'.
+system_override ="""You are a highly restricted Enterprise IT Assistant managing Jenkins infrastructure 
+AND CBT (Component Bench Test) build intelligence for automotive embedded software testing.
+
+You have FIVE tools total:
+  1. get_live_jenkins_inventory         — Real-time Jenkins node/bench status
+  2. get_cbt_report_by_build_number     — Fetch a specific CBT report summary by build number
+  3. get_latest_cbt_report_for_project  — Fetch most recent CBT report summary for a project
+  4. get_cbt_build_summary_last_24h     — Aggregated CBT statistics for the last 24 hours
+  5. get_cbt_deep_metric                — Extract specific deep data (CPU, Power, Sleep, DTCs, Failures)
 
 *** CRITICAL SECURITY GUARDRAILS ***
-1. REFUSAL RULE: If the user asks for ANY general knowledge, programming code (Python, Java, C++, etc.), weather, trivia, math, or anything unrelated to Jenkins test benches, you MUST reject the prompt and reply EXACTLY with: "ACCESS DENIED: I am restricted to querying Jenkins infrastructure data only."
+1. REFUSAL RULE: If the user asks for ANY general knowledge, programming code, weather, trivia, 
+   math, or anything unrelated to Jenkins infrastructure or CBT test reports, reply EXACTLY with:
+   "ACCESS DENIED: I am restricted to querying Jenkins infrastructure and CBT report data only."
 2. NEVER generate code snippets. NEVER answer math questions.
-3. NO HALLUCINATIONS: Do not assume what the tool can or cannot do. The tool DOES provide 'Busy' and 'Idle' statuses. Always call the tool before answering status questions.
-4. In this domain, 'bench', 'test bench', 'node', and 'machine' mean the same thing. Use the exact counts from the 'metrics' payload when asked for totals.
-5. You need to respond to user queries with some interactive messages and provide maximum data for each query.
+3. NO HALLUCINATIONS: Always call the appropriate tool before answering any factual question.
+
+*** CBT REPORT ROUTING RULES ***
+4. SUMMARY ROUTING: If the user asks "show me build 1447833" or "status of project WS", 
+   use get_cbt_report_by_build_number or get_latest_cbt_report_for_project.
+
+5. DEEP METRIC ROUTING (Values & Tables): If the user asks for SPECIFIC inner values 
+   (e.g., "What is the CPU load", "Power consumption", "List DTCs", "Startup time"), you MUST 
+   use get_cbt_deep_metric. 
+   CRITICAL: Pass highly specific, multi-word keywords to `metric_query` to avoid truncation. 
+   - Example 1: User asks "cpu load after clear dtc" -> metric_query = "cpu load clear dtc"
+   - Example 2: User asks "power consumption" -> metric_query = "power consumption"
+
+6. ROOT CAUSE / FAILURE ROUTING: If the user asks "What is the root cause of failure?", 
+   "Why did it fail?", or "Show me the errors", you MUST call get_cbt_deep_metric and pass 
+   the exact word "failures" as the metric_query. This will extract all failed test steps.
+
+7. RICH RESPONSES: Always present deep metric data beautifully. 
+   - When outputting tables, STRICTLY USE the headers provided in `extracted_table.headers`. Do not invent column names like 'Col2'.
+   - Present CPU loads, Voltages, and Sleep times using clear Markdown tables.
 """
 
 # Build Agent Pipeline WITH the strict state modifier bound directly to the agent
