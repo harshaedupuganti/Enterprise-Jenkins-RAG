@@ -3,6 +3,7 @@ import json
 import datetime
 from pymongo import MongoClient, errors
 from bson import ObjectId
+import re
 
 # --- CONFIGURATION ---
 MONGO_URI = (
@@ -172,28 +173,48 @@ def search_by_build_number(build_number: str) -> dict | None:
         return {"error": "MongoDB query timed out. Please retry."}
 
 def get_latest_report_for_project(search_term: str) -> dict | None:
-    """
-    Optimized to query the project field directly without heavy multi-field regex scans,
-    preventing timeouts in read-only enterprise environments where indexes cannot be created.
-    """
     try:
         meta_col = get_meta_collection()
         reports_col = get_reports_collection()
 
-        boosting_terms = ["latest", "project", "report", "show", "me"]
+        # 1. Clean the input string from AI filler words
         clean_term = search_term
-        for term in boosting_terms:
-            clean_term = clean_term.replace(term, "").strip()
+        for term in ["latest", "project", "report", "show", "me", "for", "the"]:
+            clean_term = re.sub(f'(?i)\\b{term}\\b', '', clean_term).strip()
         
-        # Fallback if everything was stripped
         if not clean_term:
             clean_term = search_term.strip()
 
-        # Target the project field directly to leverage any existing cluster optimization
-        meta_query = {"project": {"$regex": f"{clean_term}", "$options": "i"}}
+        # 2. THE MASTER HACK: Prevent Full Collection Scans on Typos
+        # Generate an ObjectId from 180 days ago to force the use of the primary key index.
+        six_months_ago = datetime.datetime.utcnow() - datetime.timedelta(days=180)
+        time_bound_id = ObjectId.from_datetime(six_months_ago)
+
+        # 3. Handle combined terms (e.g., "Daimler MMA IBC")
+        # Split into words and check if each word exists in ANY of the relevant fields.
+        words = [w for w in clean_term.split() if len(w) >= 2]
         
-        # Sort by createdAt descending (-1) to grab the most recent up-to-date report
-        meta_doc = meta_col.find_one(meta_query, sort=[("createdAt", -1)], max_time_ms=10000)
+        and_conditions = []
+        for word in words:
+            word_regex = {"$regex": word, "$options": "i"}
+            and_conditions.append({
+                "$or": [
+                    {"project": word_regex},
+                    {"product": word_regex},
+                    {"customer": word_regex}
+                ]
+            })
+
+        meta_query = {"_id": {"$gte": time_bound_id}}
+        if and_conditions:
+            meta_query["$and"] = and_conditions
+
+        # Sort by _id to grab the absolute most recent
+        meta_doc = meta_col.find_one(
+            meta_query, 
+            sort=[("_id", -1)], 
+            max_time_ms=15000
+        )
 
         if not meta_doc:
             return _search_legacy_by_project(clean_term)
@@ -201,30 +222,75 @@ def get_latest_report_for_project(search_term: str) -> dict | None:
         meta_formatted = format_metadata_doc(meta_doc)
         meta_id = meta_doc["_id"]
 
-        # --- STAGE 2: REPORT DETAILS SEARCH ---
         report_doc = reports_col.find_one(
             {"metadataId": meta_id}, 
             projection=TESTCASE_PROJECTION, 
-            max_time_ms=10000
+            max_time_ms=15000
         )
 
         testcases = extract_testcases(report_doc)
-        overall_res = normalize_result(meta_formatted["total_result"])
         
-        test_duration = "0:00:00"
-        if report_doc:
-            test_duration = report_doc.get("data", {}).get("testmodule", {}).get("verdict", {}).get("testduration", "0:00:00")
-
+        # Explicitly return the build number so the AI can state it!
         return {
             "report_id": str(report_doc.get("_id")) if report_doc else meta_formatted["metadata_id"],
             "metadata": meta_formatted,
-            "overall_result": overall_res,
-            "test_duration": test_duration,
+            "overall_result": normalize_result(meta_formatted.get("total_result", "N/A")),
+            "test_duration": report_doc.get("data", {}).get("testmodule", {}).get("verdict", {}).get("testduration", "0:00:00") if report_doc else "0:00:00",
             "testcases": testcases
         }
 
-    except errors.PyMongoError:
-        return {"error": "MongoDB query timed out. Please retry."}
+    except errors.PyMongoError as e:
+        print(f"MongoDB Error in get_latest: {e}")
+        return {"error": "MongoDB query timed out or failed. Please retry."}
+
+
+def _search_legacy_by_project(project_name: str) -> dict | None:
+    try:
+        reports_col = get_reports_collection()
+        
+        # Apply the exact same 180-day time-bound protection here
+        six_months_ago = datetime.datetime.utcnow() - datetime.timedelta(days=180)
+        time_bound_id = ObjectId.from_datetime(six_months_ago)
+
+        words = [w for w in project_name.split() if len(w) >= 2]
+        and_conditions = []
+        for word in words:
+            word_regex = {"$regex": word, "$options": "i"}
+            and_conditions.append({
+                "$or": [
+                    {"metadata.project": word_regex},
+                    {"metadata.customer": word_regex},
+                    {"metadata.product": word_regex},
+                    {"data.testmodule.sut.info": {"$elemMatch": {"name": "Project", "description": word_regex}}}
+                ]
+            })
+
+        query = {"_id": {"$gte": time_bound_id}}
+        if and_conditions:
+            query["$and"] = and_conditions
+
+        doc = reports_col.find_one(query, projection=TESTCASE_PROJECTION, sort=[("_id", -1)], max_time_ms=15000)
+        
+        if not doc:
+            return None
+        
+        embedded = doc.get("metadata", {}) or {}
+        return {
+            "report_id": str(doc.get("_id")),
+            "metadata": {
+                "build_number": str(embedded.get("build_number", "")),
+                "project": embedded.get("project", project_name),
+                "customer": embedded.get("customer", ""),
+                "product": embedded.get("product", ""),
+                "total_result": embedded.get("end_result", "N/A"),
+                "created_at": str(doc.get("createdAt", ""))
+            },
+            "overall_result": normalize_result(embedded.get("end_result", "N/A")),
+            "test_duration": "N/A",
+            "testcases": extract_testcases(doc)
+        }
+    except Exception:
+        return None
 
 def get_summary_last_24h() -> dict:
     """
@@ -297,31 +363,7 @@ def _search_legacy_by_build_number(build_number: str) -> dict | None:
         "testcases": extract_testcases(doc)
     }
 
-def _search_legacy_by_project(project_name: str) -> dict | None:
-    reports_col = get_reports_collection()
-    query = {"$or": [
-        {"metadata.project": {"$regex": f"^{project_name}$", "$options": "i"}},
-        {"data.testmodule.sut.info": {"$elemMatch": {"name": "Project", "description": {"$regex": f"^{project_name}$", "$options": "i"}}}}
-    ]}
-    doc = reports_col.find_one(query, projection=TESTCASE_PROJECTION, sort=[("createdAt", -1)], max_time_ms=10000)
-    if not doc:
-        return None
-    
-    embedded = doc.get("metadata", {}) or {}
-    return {
-        "report_id": str(doc.get("_id")),
-        "metadata": {
-            "build_number": str(embedded.get("build_number", "")),
-            "project": embedded.get("project", project_name),
-            "customer": embedded.get("customer", ""),
-            "product": embedded.get("product", ""),
-            "total_result": embedded.get("end_result", "N/A"),
-            "created_at": str(doc.get("createdAt", ""))
-        },
-        "overall_result": normalize_result(embedded.get("end_result", "N/A")),
-        "test_duration": "N/A",
-        "testcases": extract_testcases(doc)
-    }
+
 # --- DEEP METRIC EXTRACTION ENGINE ---
 
 DEEP_PROJECTION = {
