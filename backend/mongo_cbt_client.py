@@ -23,6 +23,7 @@ TESTCASE_PROJECTION = {
     "data.testmodule.testcase.title": 1,
     "data.testmodule.testcase.verdict": 1,
     "data.testmodule.testcase.ident": 1,
+    "data.testmodule.testcase.miscinfo": 1,
 }
 
 # --- SINGLETON DATABASE CONNECTION ---
@@ -99,7 +100,46 @@ def format_metadata_doc(meta_doc: dict) -> dict:
         "overall_runtime": meta_doc.get("overall_runtime", 0),
         "created_at": created_at,
     }
+# --- 2. ENTERPRISE BFS JSON EXTRACTOR (Add this above extract_testcases) ---
+def _extract_qg_and_comment(miscinfo_data) -> dict:
+    """
+    Iterative Breadth-First Search (BFS) JSON extractor.
+    Safely traverses dynamic MongoDB schemas without recursion limits, 
+    type assumptions, or crashing on unexpected string/null nodes.
+    """
+    extracted = {"qg_status": "N/A", "comment": "N/A"}
+    if not miscinfo_data:
+        return extracted
+        
+    # Queue for iterative traversal
+    queue = [miscinfo_data]
+    
+    while queue:
+        current = queue.pop(0)
+        
+        if isinstance(current, dict):
+            name_val = str(current.get("name", "")).strip().lower()
+            desc_val = current.get("description")
+            
+            # Secure evaluation of target keys
+            if name_val == "qg status" and desc_val is not None:
+                extracted["qg_status"] = str(desc_val).strip()
+            elif name_val == "comment" and desc_val is not None:
+                # Filter out literal "null", "None", or empty strings from bad parsers
+                clean_desc = str(desc_val).strip()
+                if clean_desc.lower() not in ["null", "none", ""]:
+                    extracted["comment"] = clean_desc
+                    
+            # Add nested values to the processing queue
+            queue.extend(current.values())
+            
+        elif isinstance(current, list):
+            # Add list items to the processing queue
+            queue.extend(current)
+            
+    return extracted
 
+# --- 3. MAIN EXTRACTION FUNCTION ---
 def extract_testcases(report_doc: dict) -> list[dict]:
     """Extracts testcase summaries from bms.stage.cbt.reports document."""
     if not report_doc:
@@ -111,14 +151,24 @@ def extract_testcases(report_doc: dict) -> list[dict]:
     
     summary = []
     for tc in testcases:
+        # Graceful defaults
         res = tc.get("verdict", {}).get("result", "N/A")
         dur = tc.get("verdict", {}).get("testduration", "0:00:00")
+        title = tc.get("title", "Unknown")
+        ident = tc.get("ident", "")
+        
+        # Invoke the robust BFS extractor
+        misc_data = _extract_qg_and_comment(tc.get("miscinfo"))
+
         summary.append({
-            "title": tc.get("title", "Unknown"),
+            "title": title,
             "result": normalize_result(res),
             "duration": dur,
-            "ident": tc.get("ident", "")
+            "ident": ident,
+            "qg_status": misc_data["qg_status"],
+            "comment": misc_data["comment"]
         })
+        
     return summary
 
 # --- TWO-STAGE RETRIEVAL IMPLEMENTATION ---
@@ -305,7 +355,9 @@ def get_summary_last_24h() -> dict:
         total_builds = 0
         statuses = {}
         projects_active = set()
-        recent_failures = []
+        
+        # ENTERPRISE UPDATE: Collect all builds, not just failures
+        recent_builds = [] 
 
         for meta_doc in cursor:
             total_builds += 1
@@ -318,20 +370,20 @@ def get_summary_last_24h() -> dict:
             if proj:
                 projects_active.add(proj)
                 
-            if res in ("FAIL", "TIMEOUT", "EXECUTION_ERROR"):
-                recent_failures.append({
-                    "project": proj,
-                    "build_number": meta.get("build_number", "Unknown"),
-                    "result": res,
-                    "date": meta.get("created_at")
-                })
+            # Unconditionally collect every build executed in the timeframe
+            recent_builds.append({
+                "project": proj,
+                "build_number": meta.get("build_number", "Unknown"),
+                "result": res,
+                "date": meta.get("created_at")
+            })
 
         return {
             "period": "Last 24 Hours",
             "total_builds": total_builds,
             "status_breakdown": statuses,
             "active_projects": list(projects_active),
-            "recent_failures": recent_failures[:15]
+            "recent_builds": recent_builds # Removed the [:15] slice limit
         }
     except errors.PyMongoError:
         return {"error": "MongoDB query timed out. Please retry."}
@@ -373,7 +425,8 @@ DEEP_PROJECTION = {
     "data.testmodule.testcase.teststep.ident": 1,
     "data.testmodule.testcase.teststep.result": 1,
     "data.testmodule.testcase.teststep.#text": 1,
-    "data.testmodule.testcase.teststep.tabularinfo": 1
+    "data.testmodule.testcase.teststep.tabularinfo": 1,
+    "data.testmodule.testcase.miscinfo": 1
 }
 
 def _parse_tabular_info(tab_info):
