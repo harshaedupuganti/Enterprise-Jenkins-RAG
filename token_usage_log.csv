@@ -177,3 +177,13 @@ Timestamp,Prompt Tokens,Completion Tokens,Total Tokens,Cost (USD),User Query
 2026-08-20 14:42:43,1993,27,2020,0.0,list all the recent reports from last 48 hours
 2026-08-20 14:43:13,10393,1047,11440,0.0,list the last 24 hours eva2 projects only
 2026-08-20 14:43:49,12453,4227,16680,0.0,list all the build reports from past 48 hours
+2026-08-24 10:34:46,1757,47,1804,0.0,hi
+2026-08-24 10:34:52,6054,120,6174,0.0,how cbt works
+2026-08-24 10:35:48,1904,43,1947,0.0,nice
+2026-08-24 10:36:13,1956,27,1983,0.0,can you show last 36 hours build reports
+2026-08-24 10:38:31,5379,1108,6487,0.0,last 24 hour build reports
+2026-08-24 10:38:50,3082,27,3109,0.0,last 36 hours build reports
+2026-08-24 10:43:37,3115,27,3142,0.0,last 36 hours build reports
+2026-08-24 10:56:24,8945,1886,10831,0.0,last 36 hours build reports
+2026-08-24 10:58:10,44212,22687,66899,0.0,list the build reports on last wednesday
+2026-08-24 11:02:04,89538,4858,94396,0.0,i just need builds on wednesday

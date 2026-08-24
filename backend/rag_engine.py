@@ -86,13 +86,16 @@ def get_latest_cbt_report_for_project(project_name: str) -> str:
     return _format_tool_response(data)
 
 @tool
-def get_cbt_build_summary_last_24h() -> str:
+def get_cbt_build_summary_last_24h(hours: int = 24, start_date: str = None, end_date: str = None, project: str = None) -> str:
     """
-    Returns aggregated statistics of all CBT builds from the last 24 hours.
-    Use this for questions like: how many builds ran today, what is the failure rate,
-    which projects had failures, overall health of the test infrastructure.
+    Returns aggregated statistics of CBT builds for ANY requested timeframe.
+    Use this for questions like: how many builds ran in the last X hours/days, what is the failure rate,
+    which projects had failures, or overall health over a timeframe.
+    - hours: Number of hours to look back (default 24). Pass 36, 48, 72 etc. if requested.
+    - start_date / end_date: Optional ISO date strings (e.g. '2026-08-20')
+    - project: Optional project name to filter by.
     """
-    data = get_summary_last_24h()
+    data = get_summary_last_24h(hours=hours, start_date=start_date, end_date=end_date, project=project)
     response_str = json.dumps(data, default=str)
     if len(response_str) > 150000:
         if "recent_builds" in data:

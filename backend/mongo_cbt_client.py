@@ -4,6 +4,7 @@ import datetime
 from pymongo import MongoClient, errors
 from bson import ObjectId
 import re
+import dateutil.parser
 
 # --- CONFIGURATION ---
 MONGO_URI = (
@@ -342,15 +343,33 @@ def _search_legacy_by_project(project_name: str) -> dict | None:
     except Exception:
         return None
 
-def get_summary_last_24h() -> dict:
+
+def get_summary_last_24h(hours: int = 24, start_date: str = None, end_date: str = None, project: str = None) -> dict:
     """
     Executes fast aggregations directly on the light metadata collection.
+    - hours: Number of hours to look back (default 24). Pass 48, 72, etc. for older data.
+    - start_date / end_date: Optional ISO date strings (e.g. '2026-08-20') for specific date ranges.
+    - project: Optional project name to filter by specific project.
     """
     try:
         meta_col = get_meta_collection()
-        yesterday = datetime.datetime.utcnow() - datetime.timedelta(hours=24)
         
-        cursor = meta_col.find({"createdAt": {"$gte": yesterday}}, max_time_ms=10000)
+        # --- DYNAMIC QUERY LOGIC ---
+        query = {}
+        if project:
+            query["project"] = project
+            
+        if start_date and end_date:
+            query["createdAt"] = {
+                "$gte": dateutil.parser.parse(start_date),
+                "$lte": dateutil.parser.parse(end_date)
+            }
+        else:
+            cutoff_time = datetime.datetime.utcnow() - datetime.timedelta(hours=hours)
+            query["createdAt"] = {"$gte": cutoff_time}
+        # ---------------------------
+
+        cursor = meta_col.find(query, max_time_ms=10000)
         
         total_builds = 0
         statuses = {}
@@ -377,9 +396,12 @@ def get_summary_last_24h() -> dict:
                 "result": res,
                 "date": meta.get("created_at")
             })
+            
+        # Make the returned period string dynamic
+        period_str = f"{start_date} to {end_date}" if start_date and end_date else f"Last {hours} Hours"
 
         return {
-            "period": "Last 24 Hours",
+            "period": period_str,
             "total_builds": total_builds,
             "status_breakdown": statuses,
             "active_projects": list(projects_active),
@@ -387,6 +409,8 @@ def get_summary_last_24h() -> dict:
         }
     except errors.PyMongoError:
         return {"error": "MongoDB query timed out. Please retry."}
+    except Exception as e:
+        return {"error": f"Error parsing parameters: {str(e)}"}
 
 # --- FALLBACK FOR LEGACY DOCUMENTS ---
 def _search_legacy_by_build_number(build_number: str) -> dict | None:
