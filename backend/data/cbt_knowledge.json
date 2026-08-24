@@ -1,0 +1,437 @@
+{
+  "knowledge_base": {
+    "topic": "CBT - Continuous Build and Test",
+    "version": "1.0",
+    "purpose": "Provide detailed knowledge about CBT, CBT+, CI/CD integration, execution flow, architecture, testing strategy, and business value.",
+
+    "what_is_cbt": {
+      "title": "What is CBT?",
+      "definition": "CBT (Continuous Build and Test) is an automated software integration and confidence testing framework that executes predefined tests whenever a software change is submitted. It validates that newly integrated software is functioning correctly before it is merged into the main development branch.",
+      "simple_explanation": "Whenever a developer makes a code change, CBT automatically builds the software, downloads it to real hardware or simulated environments, executes a set of health and confidence tests, and reports the results. If tests pass, the software can proceed through the integration process. If tests fail, the change is rejected until issues are fixed.",
+      "business_goal": [
+        "Detect defects early",
+        "Prevent unstable software from entering mainline",
+        "Support Continuous Integration (CI)",
+        "Enable Shift-Left testing strategy",
+        "Reduce debugging effort",
+        "Improve software release quality",
+        "Provide rapid feedback to developers"
+      ],
+      "key_message": "Test every software change as early as possible."
+    },
+
+    "what_is_cbt_plus": {
+      "title": "CBT+",
+      "definition": "CBT+ is an advanced version of CBT that extends traditional software confidence testing to software plus system confidence testing.",
+      "difference_from_cbt": {
+        "CBT": "Focuses mainly on software health checks and integration validations.",
+        "CBT+": "Validates both software behavior and actual system functionality using simulators, sensors, actuators and closed-loop environments."
+      },
+      "benefits": [
+        "Higher confidence in software releases",
+        "Detects system-level issues earlier",
+        "Supports feature validation",
+        "Supports regression prevention",
+        "Reduces dependency on expensive HIL environments"
+      ]
+    },
+
+    "core_concept": {
+      "confidence_testing": {
+        "definition": "Confidence testing is a quick but meaningful validation process ensuring that previously working functionality continues to work after a software change.",
+        "purpose": [
+          "Verify software health",
+          "Check major vehicle functions",
+          "Validate communication and diagnostics",
+          "Catch integration issues quickly"
+        ]
+      },
+      "non_regression_testing": {
+        "definition": "Ensures that new changes do not break existing functionality."
+      },
+      "shift_left": {
+        "definition": "Move testing earlier in the development lifecycle so defects are discovered before becoming costly."
+      }
+    },
+
+    "cbt_execution_flow": {
+      "title": "End-to-End CBT Flow",
+      "steps": [
+        {
+          "step": 1,
+          "name": "Developer Check-In",
+          "description": "Developer submits code changes to source control repository."
+        },
+        {
+          "step": 2,
+          "name": "Build Trigger",
+          "description": "CI/CD system automatically triggers a software build."
+        },
+        {
+          "step": 3,
+          "name": "Integration Queue",
+          "description": "IQM (Integration Queue Manager) manages execution order and allocates available CBT benches."
+        },
+        {
+          "step": 4,
+          "name": "Software Flashing",
+          "description": "Generated software image is flashed into the target ECU."
+        },
+        {
+          "step": 5,
+          "name": "Automated Test Execution",
+          "description": "Confidence tests are executed automatically on dedicated CBT benches."
+        },
+        {
+          "step": 6,
+          "name": "Result Analysis",
+          "description": "Pass/fail evaluation is generated."
+        },
+        {
+          "step": 7,
+          "name": "Report Generation",
+          "description": "Detailed test reports are automatically generated."
+        },
+        {
+          "step": 8,
+          "name": "Quality Gate Decision",
+          "description": "Software is accepted only if mandatory tests pass."
+        },
+        {
+          "step": 9,
+          "name": "Mainline Integration",
+          "description": "Verified software is merged into the main branch."
+        }
+      ]
+    },
+
+    "execution_strategy": {
+      "standard": {
+        "name": "Standard CBT",
+        "trigger": "Every software change",
+        "purpose": "Fast confidence check",
+        "examples": [
+          "Flashing",
+          "Diagnostics",
+          "Communication checks",
+          "Power cycle tests",
+          "CPU load verification",
+          "Startup checks"
+        ]
+      },
+      "extended": {
+        "name": "Extended CBT",
+        "trigger": "Nightly or idle bench time",
+        "purpose": "Regression and endurance testing",
+        "examples": [
+          "Multiple ignition cycles",
+          "Sleep/Wakeup cycles",
+          "Communication monitoring",
+          "Feature confidence tests"
+        ]
+      },
+      "release": {
+        "name": "Release CBT",
+        "trigger": "Release candidate validation",
+        "purpose": "Highest confidence before release",
+        "examples": [
+          "Feature testing",
+          "Failsafe testing",
+          "Diagnostics verification",
+          "System-level regression checks"
+        ]
+      }
+    },
+
+    "testing_levels": {
+      "cbt": {
+        "focus": "Software Health Check",
+        "duration": "Approximately 45 minutes",
+        "coverage": [
+          "Flashing",
+          "Diagnostics",
+          "Communications",
+          "CPU load",
+          "Startup",
+          "Sleep/Wakeup",
+          "Power Up/Power Down"
+        ]
+      },
+      "cbt_plus": {
+        "focus": "Software + System Confidence",
+        "duration": "Approximately 90 minutes",
+        "coverage": [
+          "Gear polarity",
+          "ASP calibration",
+          "Steering maneuvers",
+          "Enhanced Active Return",
+          "Rack Position Control",
+          "Fault injection"
+        ]
+      },
+      "cbt_plus_extended": {
+        "focus": "Regression and endurance",
+        "duration": "Approximately 200 minutes",
+        "coverage": [
+          "Multiple ignition cycles",
+          "Extended communication checks",
+          "Nightly regression",
+          "Endurance execution"
+        ]
+      },
+      "release_testing": {
+        "focus": "Software Release Validation",
+        "duration": "Approximately 350 minutes",
+        "coverage": [
+          "Standard tests",
+          "Extended tests",
+          "Release-level tests"
+        ]
+      }
+    },
+
+    "ci_cd_integration": {
+      "definition": "CBT is a key component within the CI/CD pipeline.",
+      "tools": [
+        "Azure DevOps",
+        "Azure Pipelines",
+        "Git",
+        "Jenkins (legacy)",
+        "PTC Integrity",
+        "Gradle"
+      ],
+      "role": [
+        "Build automation",
+        "Automated testing",
+        "Quality gates",
+        "Continuous integration",
+        "Continuous feedback"
+      ]
+    },
+
+    "test_categories": {
+      "software_health_tests": [
+        "Flashing",
+        "Variant coding",
+        "Diagnostics",
+        "Read/Clear DTC",
+        "CPU load",
+        "Startup time",
+        "Sleep/Wakeup",
+        "NVRAM checks",
+        "Communication checks"
+      ],
+      "communication_tests": [
+        "CAN validation",
+        "FlexRay validation",
+        "Message periodicity",
+        "Timeout validation",
+        "Signal range validation"
+      ],
+      "diagnostic_tests": [
+        "UDS diagnostics",
+        "Session control",
+        "DTC handling",
+        "Read Data Identifier",
+        "XCP support"
+      ],
+      "feature_tests": [
+        "ABS",
+        "ESC",
+        "EPB",
+        "ECD",
+        "DAR",
+        "ASR",
+        "Steering maneuvers",
+        "Rack position control"
+      ],
+      "system_tests": [
+        "Closed-loop testing",
+        "Sensor validation",
+        "Fault insertion",
+        "Ignition cycles",
+        "Real hardware interaction"
+      ]
+    },
+
+    "cbt_architecture": {
+      "layers": [
+        {
+          "name": "Test Case Layer",
+          "purpose": "Contains reusable automated test cases."
+        },
+        {
+          "name": "Variant Specific Layer",
+          "purpose": "Contains project-specific configuration, DBC, CDD, vehicle models, and security algorithms."
+        },
+        {
+          "name": "Wrapper Layer",
+          "purpose": "Provides abstraction and reusable interfaces."
+        },
+        {
+          "name": "Interaction Layer",
+          "purpose": "Manages signals and transport protocols."
+        },
+        {
+          "name": "Protocol Layer",
+          "purpose": "Contains UDS, GMLAN and communication services."
+        },
+        {
+          "name": "Hardware Abstraction Layer",
+          "purpose": "Provides hardware-independent access to devices."
+        }
+      ]
+    },
+
+    "hardware_setup": {
+      "braking": {
+        "gen1": {
+          "purpose": "Software health checks",
+          "components": [
+            "ECU",
+            "Power Supply",
+            "CAN Device",
+            "Debugger",
+            "Harness"
+          ]
+        },
+        "gen2": {
+          "purpose": "Feature confidence checks",
+          "components": [
+            "Labcar",
+            "IBC",
+            "Calipers",
+            "High Power Supply",
+            "CAN Tools"
+          ]
+        }
+      },
+      "steering": {
+        "components": [
+          "EPS/EPP",
+          "TAS Sensor",
+          "TAS Simulator",
+          "Harness",
+          "Vector Device",
+          "Power Supply"
+        ]
+      }
+    },
+
+    "closed_loop_testing": {
+      "definition": "Testing where the ECU interacts with simulated or real-world feedback signals, creating a realistic operating environment.",
+      "advantages": [
+        "Better system validation",
+        "Earlier issue detection",
+        "Feature-level verification",
+        "Reduced HIL dependency"
+      ]
+    },
+
+    "supported_products": {
+      "braking": [
+        "IBC",
+        "ESC",
+        "EPB",
+        "EBB",
+        "SBM",
+        "EMB"
+      ],
+      "steering": [
+        "SBW",
+        "eRCB",
+        "EPS",
+        "EPP"
+      ]
+    },
+
+    "reporting": {
+      "generated_artifacts": [
+        "Execution summary",
+        "Pass/Fail status",
+        "Detailed logs",
+        "Failure details",
+        "Traceability information",
+        "Test execution links"
+      ],
+      "audience": [
+        "Developers",
+        "Integrators",
+        "Project Managers",
+        "Test Engineers"
+      ]
+    },
+
+    "benefits": {
+      "developer": [
+        "Fast feedback",
+        "Early defect detection",
+        "Reduced manual testing"
+      ],
+      "project": [
+        "Higher release confidence",
+        "Stable integrations",
+        "Improved software quality"
+      ],
+      "organization": [
+        "Cost reduction",
+        "Continuous delivery enablement",
+        "Automation scalability",
+        "Quality standardization"
+      ]
+    },
+
+    "faq": [
+      {
+        "question": "What does CBT stand for?",
+        "answer": "Continuous Build and Test."
+      },
+      {
+        "question": "Why is CBT needed?",
+        "answer": "To automatically verify every software change and prevent unstable software from entering mainline."
+      },
+      {
+        "question": "What is the difference between CBT and CBT+?",
+        "answer": "CBT focuses on software confidence testing while CBT+ validates both software and system behavior."
+      },
+      {
+        "question": "Does CBT replace system testing?",
+        "answer": "No. CBT complements traditional SW/System testing and helps identify defects earlier."
+      },
+      {
+        "question": "When does CBT execute?",
+        "answer": "Typically for every software change submitted to the integration pipeline."
+      },
+      {
+        "question": "What happens if CBT fails?",
+        "answer": "The software change is blocked from integration until identified issues are resolved."
+      },
+      {
+        "question": "What is confidence testing?",
+        "answer": "A fast validation approach used to ensure critical functionality still works after a software modification."
+      },
+      {
+        "question": "What is Shift Left testing?",
+        "answer": "Testing earlier in the development lifecycle to reduce overall defect costs."
+      }
+    ],
+
+    "glossary": {
+      "CBT": "Continuous Build and Test",
+      "CBTPlus": "Software plus System Confidence Testing",
+      "CI": "Continuous Integration",
+      "CD": "Continuous Delivery/Development",
+      "IQM": "Integration Queue Manager",
+      "ECU": "Electronic Control Unit",
+      "DTC": "Diagnostic Trouble Code",
+      "UDS": "Unified Diagnostic Services",
+      "ABS": "Anti-lock Braking System",
+      "ESC": "Electronic Stability Control",
+      "EPB": "Electronic Parking Brake",
+      "TAS": "Torque Angle Sensor",
+      "HIL": "Hardware In Loop",
+      "NVRAM": "Non-Volatile Random Access Memory",
+      "XCP": "Universal Measurement and Calibration Protocol"
+    }
+  }
+}

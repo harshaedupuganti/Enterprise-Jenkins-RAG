@@ -1,0 +1,103 @@
+{
+  "cbt_resources": [
+    {
+      "id": 1,
+      "name": "CBT Jenkins",
+      "description": "Monitor all CBT benches and projects.",
+      "category": "Monitoring",
+      "url": "http://skobde-brk-cbt1.ad.trw.com:8080/view/all/job/CBT/",
+      "keywords": [
+        "jenkins",
+        "cbt",
+        "monitor",
+        "build status",
+        "projects",
+        "benches"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "CBT Manual Build",
+      "description": "Trigger manual build for all CBT supporting projects.",
+      "category": "Build Management",
+      "url": "https://dpe.zf-world.com/jenkins-cbt-manual/job/CBT_MANUAL/build?delay=0sec",
+      "keywords": [
+        "manual build",
+        "trigger build",
+        "cbt build",
+        "jenkins"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "IQM",
+      "description": "Check integration status of all projects and branches. Also provides CBT enable/disable options.",
+      "category": "Integration Management",
+      "url": "https://brksw-ci.zf-world.com/iqm/#/projects?projectId=6046701",
+      "keywords": [
+        "iqm",
+        "integration",
+        "project status",
+        "branches",
+        "cbt enable",
+        "cbt disable"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "CBT Dashboard",
+      "description": "View summarized project information and CBT results for each build.",
+      "category": "Dashboard",
+      "url": "https://dpe-portal.zf-world.com/cbt-dashboard",
+      "keywords": [
+        "dashboard",
+        "cbt results",
+        "project summary",
+        "build results",
+        "CBT landing page"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "CBT IQM Dashboard",
+      "description": "Power BI dashboard showing IQM and CBT Quality Gate enable/disable status across projects.",
+      "category": "Reporting",
+      "url": "https://app.powerbi.com/groups/me/reports/28499ea2-aece-44a7-8471-93886250a964/5affa063b17076e0e3b1?experience=power-bi",
+      "keywords": [
+        "powerbi",
+        "iqm dashboard",
+        "cbt dashboard",
+        "enabled projects",
+        "disabled projects"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "CBT CI Runtime Measurement BMS Dashboard",
+      "description": "Power BI dashboard for CI runtime measurements and BMS analytics.",
+      "category": "Analytics",
+      "url": "https://app.powerbi.com/groups/me/reports/251b4464-7788-4d73-bc0c-cccf167decb2/626d7cfd004ed3db4326?experience=power-bi",
+      "keywords": [
+        "runtime",
+        "measurement",
+        "ci analytics",
+        "bms",
+        "performance"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "CBT Grafana Dashboard",
+      "description": "Grafana dashboard providing CBT overview, metrics, trends and monitoring data.",
+      "category": "Monitoring",
+      "url": "http://kobc01995:3000/d/7hpSEx97z/cbt-overview?var-Customer=$__all&var-Region=$__all&var-Domain=$__all&var-Project=$__all&var-Product=$__all&var-Location=$__all&from=now-2d&to=now&timezone=browser&orgId=1&refresh=auto",
+      "keywords": [
+        "grafana",
+        "metrics",
+        "monitoring",
+        "cbt overview",
+        "analytics"
+      ]
+    }
+  ]
+}
