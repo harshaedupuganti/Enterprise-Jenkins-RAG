@@ -1,5 +1,4 @@
 from datetime import datetime
-# import pipeline_config
 
 def get_badge_style(result: str) -> str:
     base_style = "border-radius:12px; padding:3px 10px; font-size:11px; font-weight:bold; display:inline-block; color:#ffffff; white-space:nowrap;"
@@ -14,12 +13,17 @@ def get_category_badge_style(category: str) -> str:
     if not category or category == "-": return "display:none;"
     cat_lower = category.lower()
     base = "border-radius:4px; padding:2px 8px; font-size:11px; font-weight:bold; display:inline-block; white-space:nowrap;"
-    if "multiple issues" in cat_lower: return base + " background-color:#e0f7fa; color:#006064; border:1px solid #80deea;"
-    elif "cbt issue" in cat_lower and "suspected" not in cat_lower and "review" not in cat_lower: return base + " background-color:#fce4ec; color:#b71c1c; border:1px solid #ef9a9a;"
-    elif "software issue" in cat_lower and "review" not in cat_lower: return base + " background-color:#fff3e0; color:#e65100; border:1px solid #ffb74d;"
-    elif "suspected cbt issue" in cat_lower: return base + " background-color:#f3e5f5; color:#6a1b9a; border:1px solid #ce93d8;"
-    elif "review required" in cat_lower: return base + " background-color:#e8eaf6; color:#283593; border:1px solid #9fa8da;"
-    else: return base + " background-color:#f5f5f5; color:#616161; border:1px solid #e0e0e0;"
+    
+    if "cbt issue" in cat_lower and "suspected" not in cat_lower and "review" not in cat_lower: 
+        return base + " background-color:#fce4ec; color:#b71c1c; border:1px solid #ef9a9a;"
+    elif "software issue" in cat_lower and "review" not in cat_lower: 
+        return base + " background-color:#fff3e0; color:#e65100; border:1px solid #ffb74d;"
+    elif "suspected cbt issue" in cat_lower: 
+        return base + " background-color:#f3e5f5; color:#6a1b9a; border:1px solid #ce93d8;"
+    elif "review required" in cat_lower: 
+        return base + " background-color:#e8eaf6; color:#283593; border:1px solid #9fa8da;"
+    else: 
+        return base + " background-color:#f5f5f5; color:#616161; border:1px solid #e0e0e0;"
 
 def build_email(builds: list[dict], kpis: dict, failure_analyses: dict, filters_used: dict) -> tuple[str, str]:
     now = datetime.now()
@@ -27,7 +31,7 @@ def build_email(builds: list[dict], kpis: dict, failure_analyses: dict, filters_
     filter_summary = f"Lookback: {filters_used.get('lookback_hours', 24)}h"
     if filters_used.get("projects"): filter_summary += f" | Projects: {','.join(filters_used['projects'])}"
     
-    subject = f"🔬 CBT Daily Intelligence Report | {filter_summary} | {kpis['passed']}✅ {kpis['failed']}❌"
+    subject = f"🔬 CBT Daily Summary Report | {filter_summary} | {kpis['passed']}✅ {kpis['failed']}❌"
     
     html = f"""
     <html><body style='font-family: Calibri, Arial, sans-serif; margin:0; padding:0; background-color:#ffffff;'>
@@ -35,7 +39,7 @@ def build_email(builds: list[dict], kpis: dict, failure_analyses: dict, filters_
         <table width="100%" cellpadding="20" cellspacing="0" border="0" style="background-color:#1a2744; color:#ffffff; font-family:Calibri, Arial, sans-serif;">
             <tr>
                 <td align="left" valign="middle">
-                    <h2 style="margin:0; font-size:24px; font-weight:bold; letter-spacing:0.5px;">CBT Daily Intelligence Report</h2>
+                    <h2 style="margin:0; font-size:24px; font-weight:bold; letter-spacing:0.5px;">CBT Daily Summary Report</h2>
                     <p style="margin:4px 0 0 0; font-size:14px; color:#e8f4fd;">Automotive Embedded Software &mdash; AI-Powered Fault Triage</p>
                 </td>
                 <td align="right" valign="middle" style="white-space:nowrap;">
@@ -68,6 +72,33 @@ def build_email(builds: list[dict], kpis: dict, failure_analyses: dict, filters_
             </tr>
         </table><br>
 
+        <table width="100%" cellpadding="12" cellspacing="0" border="0" 
+               style="background-color:#f8f9fa; border:1px solid #e0e0e0; border-radius:6px; font-family:Calibri,Arial,sans-serif; margin-bottom:16px;">
+          <tr>
+            <td colspan="4" style="font-size:13px; font-weight:bold; color:#1a2744; border-bottom:1px solid #e0e0e0; padding-bottom:8px;">
+              AI Fault Classification Guide & Row Color Legend
+            </td>
+          </tr>
+          <tr>
+            <td width="25%" style="padding:8px; vertical-align:top; background-color:#fce4ec; border-right:1px solid #ffffff;">
+              <span style="color:#b71c1c; font-size:11px; font-weight:bold;">🔧 CBT Issue</span>
+              <div style="font-size:11px; color:#555; margin-top:4px;">Bench hardware fault (XCP, VFlash).</div>
+            </td>
+            <td width="25%" style="padding:8px; vertical-align:top; background-color:#fff3e0; border-right:1px solid #ffffff;">
+              <span style="color:#e65100; font-size:11px; font-weight:bold;">🐛 Software Issue</span>
+              <div style="font-size:11px; color:#555; margin-top:4px;">ECU logic defect confirmed (DTC, sleep).</div>
+            </td>
+            <td width="25%" style="padding:8px; vertical-align:top; background-color:#f3e5f5; border-right:1px solid #ffffff;">
+              <span style="color:#6a1b9a; font-size:11px; font-weight:bold;">❓ Suspected CBT</span>
+              <div style="font-size:11px; color:#555; margin-top:4px;">Empty/ambiguous logs. Likely bench issue.</div>
+            </td>
+            <td width="25%" style="padding:8px; vertical-align:top; background-color:#e8eaf6;">
+              <span style="color:#283593; font-size:11px; font-weight:bold;">🔍 Review Required</span>
+              <div style="font-size:11px; color:#555; margin-top:4px;">Mixed failures. Manual expert review needed.</div>
+            </td>
+          </tr>
+        </table>
+
         <h3 style="font-family:Calibri, Arial, sans-serif; color:#1a2744;">Detailed Build Matrix</h3>
         <table width="100%" cellpadding="6" cellspacing="0" style="border-collapse:collapse; font-family:Calibri, Arial, sans-serif; font-size:12px; border:1px solid #d0d7de;">
             <thead>
@@ -94,12 +125,16 @@ def build_email(builds: list[dict], kpis: dict, failure_analyses: dict, filters_
         elif res == "WARNING": bg_color = "#fff8e1"
         elif res in ["FAIL", "TIMEOUT", "EXECUTION_ERROR"]:
             cat_lower = category.lower()
-            if "multiple issues" in cat_lower: bg_color = "#e0f7fa"
-            elif "cbt issue" in cat_lower and "suspected" not in cat_lower and "review" not in cat_lower: bg_color = "#fce4ec"
-            elif "software issue" in cat_lower and "review" not in cat_lower: bg_color = "#fff3e0"
-            elif "suspected cbt issue" in cat_lower: bg_color = "#f3e5f5"
-            elif "review required" in cat_lower: bg_color = "#e8eaf6"
-            else: bg_color = "#fff5f5"
+            if "cbt issue" in cat_lower and "suspected" not in cat_lower and "review" not in cat_lower: 
+                bg_color = "#fce4ec"
+            elif "software issue" in cat_lower and "review" not in cat_lower: 
+                bg_color = "#fff3e0"
+            elif "suspected cbt issue" in cat_lower: 
+                bg_color = "#f3e5f5"
+            elif "review required" in cat_lower: 
+                bg_color = "#e8eaf6"
+            else: 
+                bg_color = "#fff5f5"
             
         html += f"""
         <tr style="background-color:{bg_color};">

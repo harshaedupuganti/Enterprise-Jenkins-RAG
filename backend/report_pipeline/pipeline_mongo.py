@@ -2,20 +2,20 @@ from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any
 import datetime
 import logging
+import re
 from bson.objectid import ObjectId
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
 from backend.report_pipeline import pipeline_config
-import re
 
 logger = logging.getLogger(__name__)
 
 @dataclass
 class PipelineFilters:
     lookback_hours: int = 24
-    start_date: Optional[str] = None          # ISO string e.g. "2026-08-20"
+    start_date: Optional[str] = None          
     end_date: Optional[str] = None
-    projects: List[str] = field(default_factory=list)   # multi-select list
+    projects: List[str] = field(default_factory=list)   
     customers: List[str] = field(default_factory=list)
     products: List[str] = field(default_factory=list)
     regions: List[str] = field(default_factory=list)
@@ -23,7 +23,7 @@ class PipelineFilters:
     locations: List[str] = field(default_factory=list)
     test_benches: List[str] = field(default_factory=list)
     build_types: List[str] = field(default_factory=list)
-    result_filter: List[str] = field(default_factory=list)  # e.g. ["FAIL","TIMEOUT"]
+    result_filter: List[str] = field(default_factory=list)  
 
 try:
     client = MongoClient(pipeline_config.MONGO_URI, serverSelectionTimeoutMS=5000)
@@ -79,7 +79,6 @@ def fetch_builds(filters: PipelineFilters) -> List[Dict[str, Any]]:
     try:
         query = {}
         
-        # Time bounding
         if filters.start_date and filters.end_date:
             start_dt = datetime.datetime.fromisoformat(filters.start_date.replace('Z', '+00:00'))
             end_dt = datetime.datetime.fromisoformat(filters.end_date.replace('Z', '+00:00'))
@@ -91,7 +90,6 @@ def fetch_builds(filters: PipelineFilters) -> List[Dict[str, Any]]:
             query["createdAt"] = {"$gte": lookback_time}
             query["_id"] = {"$gte": ObjectId.from_datetime(lookback_time)}
 
-        # Array filters
         if filters.projects: query["project"] = {"$in": [re.compile(f"^{p}$", re.I) for p in filters.projects]}
         if filters.customers: query["customer"] = {"$in": filters.customers}
         if filters.products: query["product"] = {"$in": filters.products}
@@ -147,8 +145,14 @@ def fetch_builds(filters: PipelineFilters) -> List[Dict[str, Any]]:
                             if isinstance(teststeps, dict): teststeps = [teststeps]
                             for step in teststeps:
                                 step_res = normalize_result(step.get("result", ""))
-                                if step_res in ["FAIL", "TIMEOUT", "EXECUTION_ERROR"]:
-                                    step_text = str(step.get("#text", "")).strip().replace("\n", " ")
+                                step_text = str(step.get("#text", "")).strip().replace("\n", " ")
+                                
+                                # NEW LOGIC: Catch NA/WARN steps if they contain actual error text from retry loops
+                                text_lower = step_text.lower()
+                                is_hard_fail = step_res in ["FAIL", "TIMEOUT", "EXECUTION_ERROR"]
+                                is_hidden_error = step_res in ["N/A", "WARNING"] and any(kw in text_lower for kw in ["error", "fail", "timeout"])
+                                
+                                if is_hard_fail or is_hidden_error:
                                     failed_steps.append({
                                         "ident": step.get("ident", "Unknown_Step"),
                                         "text": step_text
@@ -156,6 +160,7 @@ def fetch_builds(filters: PipelineFilters) -> List[Dict[str, Any]]:
                         
                         build_info["testcases"].append({
                             "title": tc.get("title", "Unknown"),
+                            "description": tc.get("description", ""), # EXTRACT TEST INTENT
                             "result": tc_result,
                             "testduration": verdict.get("testduration", "0:00:00"),
                             "ident": tc.get("ident", ""),

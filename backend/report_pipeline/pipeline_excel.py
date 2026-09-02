@@ -57,7 +57,7 @@ def generate_report(builds: list[dict], failure_analyses: dict) -> str:
         # Sheet 2: Build Details
         ws2 = wb.create_sheet(title="Build Details")
         headers_2 = [
-            "SNO", "Build Number", "Project", "Customer", "Product", "Domain", "Location", "Region",
+            "SNO", "Build Number", "Project", "Product", "Region", "Customer", "Domain", "Location",
             "Mode", "Test Bench", "Branch", "Start Time", "Runtime (min)",
             "Overall Result", "Pass TC", "Fail TC", "Warn TC", "Failure Reason (AI)", "Confidence Score", "Analysis Stage"
         ]
@@ -78,8 +78,8 @@ def generate_report(builds: list[dict], failure_analyses: dict) -> str:
             stage = analysis_data.get("analysis_stage", "-")
             
             row_data = [
-                idx, build_num, build.get("project", ""), build.get("customer", ""), build.get("product", ""),
-                build.get("domain", ""), build.get("location", ""), build.get("region", ""),
+                idx, build_num, build.get("project", ""), build.get("product", ""), build.get("region", ""),
+                build.get("customer", ""), build.get("domain", ""), build.get("location", ""), 
                 build.get("build_type", "Standard"), build.get("test_bench", ""), build.get("integration_branch", ""),
                 str(build.get("start_time", "")), runtime_min, build.get("end_result", ""),
                 pass_tc, fail_tc, warn_tc, category, conf, stage
@@ -101,27 +101,41 @@ def generate_report(builds: list[dict], failure_analyses: dict) -> str:
 
         # Sheet 3: AI Failure Analysis
         ws3 = wb.create_sheet(title="AI Failure Analysis")
-        ws3.append(["Build Number", "Project", "Mode", "Fault Category", "Failed Testcases", "AI Analysis"])
+        ws3.append(["Build Number", "Project", "Product", "Region", "Mode", "Fault Category", "Failed Testcases", "AI Analysis"])
         failed_builds = [b for b in builds if b.get("end_result") in ["FAIL", "TIMEOUT", "EXECUTION_ERROR"]]
         for build in failed_builds:
             build_number = str(build.get("build_number", ""))
             failed_tcs_str = "\n".join(f"- {tc.get('title','')}" for tc in build.get("testcases", []) if tc.get("result") in ["FAIL", "TIMEOUT", "EXECUTION_ERROR"])
             analysis_data = failure_analyses.get(build_number, {})
             ws3.append([
-                build_number, build.get("project", ""), build.get("build_type", "Standard"),
-                analysis_data.get("category", "Review Required"), failed_tcs_str, analysis_data.get("text", "No analysis")
+                build_number, 
+                build.get("project", ""), 
+                build.get("product", ""), 
+                build.get("region", ""), 
+                build.get("build_type", "Standard"),
+                analysis_data.get("category", "Review Required"), 
+                failed_tcs_str, 
+                analysis_data.get("text", "No analysis")
             ])
             
         # Sheet 4: CBT Issue Register
+        # UPDATED: Removed hardcoded sub_category and trigger_step. Replaced with generalized AI output.
         ws4 = wb.create_sheet(title="CBT Issue Register")
-        ws4.append(["Build Number", "Test Bench", "Sub Category", "Trigger Step", "Evidence Excerpt", "Action Required"])
+        ws4.append(["Build Number", "Project", "Product", "Region", "Test Bench", "Fault Category", "AI Root Cause Analysis", "Action Required"])
         for build in failed_builds:
             build_number = str(build.get("build_number", ""))
             analysis_data = failure_analyses.get(build_number, {})
-            if analysis_data.get("severity") == "BENCH_DOWN":
+            # Only log builds the LLM tagged as a CBT Issue
+            if "CBT Issue" in analysis_data.get("category", ""):
                 ws4.append([
-                    build_number, build.get("test_bench", ""), analysis_data.get("sub_category", ""),
-                    analysis_data.get("trigger_step", ""), analysis_data.get("text", ""), "Assign to Maintenance"
+                    build_number, 
+                    build.get("project", ""), 
+                    build.get("product", ""), 
+                    build.get("region", ""), 
+                    build.get("test_bench", ""), 
+                    analysis_data.get("category", ""),
+                    analysis_data.get("text", ""), 
+                    "Assign to Bench Maintenance"
                 ])
 
         # Formatting
