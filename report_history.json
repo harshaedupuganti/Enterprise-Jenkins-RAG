@@ -1,0 +1,26 @@
+[
+  {
+    "timestamp": "2026-09-01T15:43:34.018534",
+    "scope": "Last 24h",
+    "builds": 35,
+    "success": true,
+    "email_sent": true,
+    "error": null
+  },
+  {
+    "timestamp": "2026-09-01T15:35:41.818828",
+    "scope": "Last 24h",
+    "builds": 2,
+    "success": true,
+    "email_sent": true,
+    "error": null
+  },
+  {
+    "timestamp": "2026-09-01T15:14:10.598343",
+    "scope": "Last 24h",
+    "builds": 33,
+    "success": true,
+    "email_sent": true,
+    "error": null
+  }
+]

@@ -2,10 +2,18 @@ import os
 import json
 from dotenv import load_dotenv
 from langchain_openai import AzureChatOpenAI
-from langchain_core.tools import tool
 from langchain.agents import create_agent
-from backend.jenkins_client import fetch_jenkins_nodes
 from langchain.tools import tool
+
+from backend.jenkins_client import fetch_jenkins_nodes
+from backend.cbt_knowledge_client import get_cbt_knowledge_base
+from .mongo_cbt_client import (
+    search_by_build_number, 
+    get_latest_report_for_project, 
+    get_summary_last_24h,
+    search_deep_metric
+)
+
 # Load environment configuration
 load_dotenv()
 
@@ -17,14 +25,7 @@ llm = AzureChatOpenAI(
     api_key=os.getenv("AZURE_OPENAI_API_KEY"),
     temperature=0
 )
-from backend.cbt_knowledge_client import get_cbt_knowledge_base
 
-from .mongo_cbt_client import (
-    search_by_build_number, 
-    get_latest_report_for_project, 
-    get_summary_last_24h,
-    search_deep_metric
-)
 # 2. Universal Real-Time Data Pipeline Tool
 
 def _format_tool_response(payload: dict) -> str:
@@ -36,8 +37,6 @@ def _format_tool_response(payload: dict) -> str:
     if "error" in payload:
         return json.dumps(payload)
     
-    # 1. OPTIMIZATION: Isolate only the fields the AI needs to answer user queries
-    # This prevents token bloat and keeps massive test lists under LLM limits.
     if "testcases" in payload and isinstance(payload["testcases"], list):
         optimized_tc = []
         for tc in payload["testcases"]:
@@ -50,11 +49,8 @@ def _format_tool_response(payload: dict) -> str:
             })
         payload["testcases"] = optimized_tc
 
-    # 2. Serialize safely
     response_str = json.dumps(payload, default=str)
     
-    # 3. CONTEXT SAFETY NET: 150k characters allows for roughly ~35k tokens, 
-    # well within modern Enterprise LLM limits but preventing API crashes.
     if len(response_str) > 150000:
         if "testcases" in payload:
             payload["testcases"] = []
@@ -91,9 +87,6 @@ def get_cbt_build_summary_last_24h(hours: int = 24, start_date: str = None, end_
     Returns aggregated statistics of CBT builds for ANY requested timeframe.
     Use this for questions like: how many builds ran in the last X hours/days, what is the failure rate,
     which projects had failures, or overall health over a timeframe.
-    - hours: Number of hours to look back (default 24). Pass 36, 48, 72 etc. if requested.
-    - start_date / end_date: Optional ISO date strings (e.g. '2026-08-20')
-    - project: Optional project name to filter by.
     """
     data = get_summary_last_24h(hours=hours, start_date=start_date, end_date=end_date, project=project)
     response_str = json.dumps(data, default=str)
@@ -111,8 +104,6 @@ def get_cbt_deep_metric(build_number: str, metric_query: str) -> str:
     Use this tool when the user asks for specific nested values inside a CBT report,
     such as 'CPU load', 'Power consumption', 'Current', 'Voltage', 'Sleep time', 'Startup time', 
     'DTCs', or any other specific tabular/text data from the test steps.
-    - build_number: The specific build number (e.g. '1447833')
-    - metric_query: A short 1-3 word keyword search (e.g., 'cpu load', 'sleep', 'power')
     """
     data = search_deep_metric(build_number, metric_query)
     return _format_tool_response(data)
@@ -127,21 +118,13 @@ def get_live_jenkins_inventory() -> str:
         return json.dumps({"error": "Unable to communicate with Jenkins API or no data returned."})
 
     inventory = []
-    
-    metrics = {
-        "Total_Benches_And_Nodes": len(nodes),
-        "Idle": 0,
-        "Busy": 0,
-        "Temporarily_Offline": 0,
-        "Offline": 0
-    }
+    metrics = {"Total_Benches_And_Nodes": len(nodes), "Idle": 0, "Busy": 0, "Temporarily_Offline": 0, "Offline": 0}
 
     for node in nodes:
         is_offline = node.get("offline", False)
         is_temp_offline = node.get("temporarilyOffline", False)
         is_idle = node.get("idle", False)
         
-        # APPLYING EXACT STRICT FORMULA FOR STATUS
         if is_temp_offline == True:
             status = "Temporarily Offline"
             metrics["Temporarily_Offline"] += 1
@@ -172,14 +155,41 @@ def get_live_jenkins_inventory() -> str:
             
         inventory.append(item)
 
-    payload = {
-        "metrics": metrics,
-        "inventory": inventory
-    }
+    return json.dumps({"metrics": metrics, "inventory": inventory}, indent=2)
 
-    return json.dumps(payload, indent=2)
+@tool
+def compare_builds_metric(build_numbers: str, metric_query: str) -> str:
+    """
+    Compares a specific metric (CPU load, power, sleep time, DTCs, cycle time)
+    across two or more CBT build numbers side by side.
+    
+    Use when user says: "compare build X and Y", "difference between 1466646 and 1466284 for cpu load",
+    "which build has better cpu load: X or Y", "trend of sleep time across builds X, Y, Z".
+    
+    - build_numbers: Comma-separated build numbers, e.g. "1466646,1466284,1465000"
+    - metric_query: The metric to compare, e.g. "cpu load", "sleep", "power", "failures", "cycle time"
+    
+    Returns structured comparison data for all requested builds.
+    """
+    build_list = [b.strip() for b in build_numbers.split(",") if b.strip()]
+    if len(build_list) < 2:
+        return json.dumps({"error": "Please provide at least 2 build numbers separated by commas."})
+    if len(build_list) > 5:
+        return json.dumps({"error": "Maximum 5 builds can be compared at once to avoid context limits."})
+    
+    results = {}
+    for build_num in build_list:
+        # Calls the actual DB search function for each build
+        results[build_num] = search_deep_metric(build_num, metric_query)
+    
+    return json.dumps({
+        "comparison_type": "Multi-Build Metric Comparison",
+        "metric": metric_query,
+        "builds_compared": build_list,
+        "data": results
+    }, default=str)
 
-# Register Tool
+# Register Tools
 tools = [
     get_live_jenkins_inventory, 
     get_cbt_report_by_build_number, 
@@ -187,24 +197,25 @@ tools = [
     get_cbt_build_summary_last_24h,
     get_cbt_deep_metric,
     get_cbt_knowledge_base,
+    compare_builds_metric,
 ]
 
 # 3. ABSOLUTE SYSTEM OVERRIDE (State Modifier)
-# This replaces the manual chat_history insertion and creates a permanent jail.
 system_override = """You are a highly restricted Enterprise IT Assistant managing Jenkins infrastructure
 AND CBT (Continuous Build and Test) build intelligence for automotive embedded software testing.
 
-You have SIX specialized tools:
+You have SEVEN specialized tools:
   1. get_live_jenkins_inventory         — Real-time Jenkins node/bench availability.
   2. get_cbt_report_by_build_number     — Fetch a specific CBT report summary by build number.
   3. get_latest_cbt_report_for_project  — Fetch most recent CBT report summary for a project.
   4. get_cbt_build_summary_last_24h     — Aggregated CBT statistics for last 24 hours.
   5. get_cbt_deep_metric                — Extract specific deep metrics (CPU, Power, Sleep, DTCs, Failures).
   6. get_cbt_knowledge_base             — Official CBT static reference: architecture, definitions, dashboards, URLs.
+  7. compare_builds_metric              — Compare metrics side-by-side across multiple builds.
 
 *** TOOL ROUTING POLICIES ***
 1. REFERENCE / ARCHITECTURE / LINKS:
-   - If asked "What is CBT?", "Explain shift-left", "What is Gen1 vs Gen2?", "What are the test tiers?", or "Give me the Grafana/Jenkins link":
+   - If asked "What is CBT?", "Explain shift-left", or "Give me the Grafana/Jenkins link":
      --> MUST use `get_cbt_knowledge_base`.
 
 2. LIVE METRICS & ERRORS:
@@ -214,10 +225,10 @@ You have SIX specialized tools:
      --> MUST use `get_cbt_report_by_build_number` or `get_latest_cbt_report_for_project`.
 
 *** STRICT SCOPE & VERBOSITY RULES (CRITICAL) ***
-1. ANSWER EXACTLY WHAT IS ASKED: Never volunteer unprompted information. If the user asks "What is CBT?", provide ONLY the brief definition. Do NOT list dashboards, benefits, or comparisons (like CBT vs CBT+) unless explicitly requested.
-2. IGNORE EXCESS TOOL DATA: The `get_cbt_knowledge_base` tool may return a large JSON payload containing dashboards, hardware setups, and FAQs all at once. You MUST filter this payload and extract ONLY the exact data point needed to answer the user's specific question. Discard the rest of the context.
-3. BE CONCISE BUT POLITE: Enterprise users read fast. Provide a brief 1-2 sentence professional introduction before showing data (e.g., "Here is the latest report for EVA2:"). 
-4. NO TRUNCATION: NEVER truncate tables, logs, or lists with "..." or "etc.". You MUST output every single row and data point returned by the tool, regardless of length.
+1. ANSWER EXACTLY WHAT IS ASKED: Never volunteer unprompted information.
+2. IGNORE EXCESS TOOL DATA: Extract ONLY the exact data point needed to answer the user's specific question. Discard the rest.
+3. BE CONCISE BUT POLITE: Provide a brief 1-2 sentence professional introduction before showing data. 
+4. NO TRUNCATION: NEVER truncate tables, logs, or lists with "..." or "etc.". Output every single row.
 
 *** PRESENTATION RULES ***
 - Output tabular data using standard Markdown table syntax.
@@ -225,42 +236,28 @@ You have SIX specialized tools:
 - Always include the actual URLs (hyperlinked) when referencing dashboards or monitoring tools.
 
 *** CRITICAL SECURITY GUARDRAILS ***
-1. GREETING RULE: If the user simply greets you (e.g., "hi", "hello", "hey"), politely introduce yourself as the CBT AI Assistant, and ask how you can help them with their infrastructure or test reports today.
-2. REFUSAL RULE: If the user asks for ANY general knowledge, programming code, weather, trivia, 
-   math, or anything unrelated to Jenkins infrastructure or CBT test reports, reply EXACTLY with:
+1. GREETING RULE: If the user simply greets you, politely introduce yourself as the CBT AI Assistant.
+2. REFUSAL RULE: If the user asks for ANY general knowledge, programming code, weather, trivia, or math, reply EXACTLY with:
    "ACCESS DENIED: I am restricted to querying Jenkins infrastructure and CBT report data only."
-3. NEVER generate code snippets. NEVER answer math questions.
-4. NO HALLUCINATIONS: Always call the appropriate tool before answering any factual question.
+3. NO HALLUCINATIONS: Always call the appropriate tool before answering any factual question.
 
 *** CBT REPORT ROUTING RULES ***
-5. SUMMARY ROUTING: If the user asks "show me build 1447833" or "status of project WS", 
-   use get_cbt_report_by_build_number or get_latest_cbt_report_for_project.
-
-6. DEEP METRIC ROUTING (Values & Tables): If the user asks for SPECIFIC inner values 
-   (e.g., "What is the CPU load", "Power consumption", "List DTCs", "Startup time"), you MUST 
-   use get_cbt_deep_metric. 
-   CRITICAL: Pass highly specific, multi-word keywords to `metric_query` to avoid truncation. 
-   - Example 1: User asks "cpu load after clear dtc" -> metric_query = "cpu load clear dtc"
-   - Example 2: User asks "power consumption" -> metric_query = "power consumption"
-
-7. ROOT CAUSE / FAILURE ROUTING: If the user asks "What is the root cause of failure?", 
-   "Why did it fail?", or "Show me the errors", you MUST call get_cbt_deep_metric and pass 
-   the exact word "failures" as the metric_query. This will extract all failed test steps.
-
-8. RICH RESPONSES & PROPER UI RENDERING: Always present deep metric data beautifully. 
-   - When outputting tables, STRICTLY USE the headers provided in `extracted_table.headers`. Do not invent column names like 'Col2'.
-   - Present CPU loads, Voltages, and Sleep times using clear Markdown tables.
-   - *** CRITICAL UI REQUIREMENT ***: DO NOT wrap Markdown tables inside ```text or ```markdown code blocks. Our frontend UI renders raw markdown tables natively as scrollable components. Just output the raw markdown table (e.g., | Col | Col |) directly into the chat response.
+4. SUMMARY ROUTING: If user asks "show me build 1447833" -> use get_cbt_report_by_build_number.
+5. DEEP METRIC ROUTING (Values & Tables): If user asks for SPECIFIC inner values ("CPU load", "Sleep time"), MUST use get_cbt_deep_metric. Pass highly specific, multi-word keywords to `metric_query`.
+6. ROOT CAUSE / FAILURE ROUTING: If user asks "Why did it fail?", MUST call get_cbt_deep_metric and pass "failures" as the metric_query.
+7. MULTI-BUILD COMPARISON: If the user asks to compare a metric across multiple builds (e.g. "compare cpu load between 1466646 and 1466284"), use compare_builds_metric. Pass ALL build numbers as a comma-separated string.
+   PRESENTATION: Format the comparison as a clean Markdown table with one column per build. Highlight the best/worst value in each row. Add a "Winner" column.
+   Example output table format:
+   | Metric | Build 1466646 | Build 1466284 | Winner |
+   |--------|--------------|--------------|--------|
+   | Core 0 Avg Load | 7.2% | 8.9% | 1466646 ✓ |
+8. RICH RESPONSES & PROPER UI RENDERING: Always present deep metric data beautifully. STRICTLY USE the headers provided in `extracted_table.headers`. DO NOT wrap Markdown tables inside ```text or ```markdown code blocks. Our frontend UI renders raw markdown tables natively. Just output the raw markdown table directly.
+9. BENCH/NODE RESOLUTION: Bench = Node. If the user asks about bench status, search Jenkins inventory.
 """
 
-# Build Agent Pipeline WITH the strict state modifier bound directly to the agent
 agent_executor = create_agent(llm, tools=tools, system_prompt=system_override)
 
 def get_ai_response(chat_history: list) -> str:
-    """Passes only the conversational history. The agent's rules are permanently hardcoded above."""
-    
-    # We no longer manually prepend the system prompt here.
-    # We only format the user/assistant chat history.
     formatted_messages = []
     for msg in chat_history:
         formatted_messages.append((msg["role"], msg["content"]))

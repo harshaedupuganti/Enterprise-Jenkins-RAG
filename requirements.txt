@@ -9,3 +9,25 @@ pydantic
 python-dotenv
 pymongo[srv]==4.6.3
 dnspython==2.6.1
+
+
+# ==============================================================================
+# CBT Daily Intelligence Report Mailer - Project Dependencies
+# ==============================================================================
+
+# MongoDB Database Driver & DNS Resolution
+pymongo[srv]==4.6.3
+dnspython==2.6.1
+
+# Excel Report Generation & Data Manipulation
+openpyxl>=3.1.2
+pandas>=2.2.0
+
+# Windows Outlook Automation (win32com.client)
+pywin32>=306
+
+# Date & Time Utilities
+python-dateutil>=2.9.0
+
+# Background Job Scheduling
+apscheduler>=3.10.4
