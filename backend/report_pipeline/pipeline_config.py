@@ -8,7 +8,7 @@ META_COLLECTION = "bms.stage.cbt.metadata.reports"
 REPORTS_COLLECTION = "bms.stage.cbt.reports"
 
 # Default lookback window in hours
-DEFAULT_LOOKBACK_HOURS = 48
+DEFAULT_LOOKBACK_HOURS = 60
 
 # LLM — local GGUF model
 GGUF_MODEL_PATH = r"C:\models\AI LOCAL\Meta-Llama-3-8B-Instruct.Q4_K_M.gguf"

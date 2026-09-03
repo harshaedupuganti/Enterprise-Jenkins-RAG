@@ -1,5 +1,69 @@
 [
   {
+    "timestamp": "2026-09-02T17:26:36.745126",
+    "scope": "Last 60h",
+    "builds": 33,
+    "success": true,
+    "email_sent": true,
+    "error": null
+  },
+  {
+    "timestamp": "2026-09-02T17:17:26.466083",
+    "scope": "Last 60h",
+    "builds": 6,
+    "success": true,
+    "email_sent": true,
+    "error": null
+  },
+  {
+    "timestamp": "2026-09-02T17:14:05.373151",
+    "scope": "Last 60h",
+    "builds": 6,
+    "success": true,
+    "email_sent": true,
+    "error": null
+  },
+  {
+    "timestamp": "2026-09-02T17:08:29.950921",
+    "scope": "Last 24h",
+    "builds": 3,
+    "success": true,
+    "email_sent": true,
+    "error": null
+  },
+  {
+    "timestamp": "2026-09-02T17:07:57.631490",
+    "scope": "Last 24h",
+    "builds": 3,
+    "success": true,
+    "email_sent": true,
+    "error": null
+  },
+  {
+    "timestamp": "2026-09-02T16:59:39.970088",
+    "scope": "Last 24h",
+    "builds": 8,
+    "success": true,
+    "email_sent": true,
+    "error": null
+  },
+  {
+    "timestamp": "2026-09-02T16:55:20.278956",
+    "scope": "Last 24h",
+    "builds": 7,
+    "success": true,
+    "email_sent": true,
+    "error": null
+  },
+  {
+    "timestamp": "2026-09-02T15:12:40.483470",
+    "scope": "Last 24h",
+    "builds": 7,
+    "success": true,
+    "email_sent": true,
+    "error": null
+  },
+  {
     "timestamp": "2026-09-02T12:31:38.245225",
     "scope": "Last 24h",
     "builds": 9,

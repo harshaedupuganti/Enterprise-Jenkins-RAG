@@ -22,6 +22,7 @@ class PipelineFilters:
     domains: List[str] = field(default_factory=list)
     locations: List[str] = field(default_factory=list)
     test_benches: List[str] = field(default_factory=list)
+    integration_branches: List[str] = field(default_factory=list)
     build_types: List[str] = field(default_factory=list)
     result_filter: List[str] = field(default_factory=list)  
 
@@ -97,6 +98,7 @@ def fetch_builds(filters: PipelineFilters) -> List[Dict[str, Any]]:
         if filters.domains: query["domain"] = {"$in": filters.domains}
         if filters.locations: query["location"] = {"$in": filters.locations}
         if filters.test_benches: query["test_bench"] = {"$in": filters.test_benches}
+        if filters.integration_branches: query["integration_branch"] = {"$in": filters.integration_branches}
         if filters.build_types: query["build_type"] = {"$in": filters.build_types}
 
         cursor = meta_coll.find(query).sort("createdAt", -1).max_time_ms(15000)
@@ -178,23 +180,69 @@ def fetch_builds(filters: PipelineFilters) -> List[Dict[str, Any]]:
         
     return builds_data
 
-def fetch_filter_options() -> Dict[str, List[str]]:
-    try:
-        now_utc = datetime.datetime.now(datetime.timezone.utc)
-        lookback_time = now_utc - datetime.timedelta(days=180)
-        dummy_id = ObjectId.from_datetime(lookback_time)
-        query = {"_id": {"$gte": dummy_id}}
+def fetch_filter_options() -> Dict[str, Any]:
+    import os
+    import json
+    
+    CACHE_FILE = os.path.join("backend", "report_pipeline", "hierarchy_cache.json")
+    
+    # 1. Try to serve from lightning-fast cache first
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                return {"hierarchy": json.load(f), "regions": ["AP", "EU", "NA", "MITSUBISHI"]}
+        except Exception as e:
+            logger.error(f"[pipeline_mongo] Cache read failed, falling back to DB: {e}")
 
-        return {
-            "projects": meta_coll.distinct("project", query, maxTimeMS=15000),
-            "customers": meta_coll.distinct("customer", query, maxTimeMS=15000),
-            "products": meta_coll.distinct("product", query, maxTimeMS=15000),
-            "regions": meta_coll.distinct("region", query, maxTimeMS=15000),
-            "domains": meta_coll.distinct("domain", query, maxTimeMS=15000),
-            "locations": meta_coll.distinct("location", query, maxTimeMS=15000),
-            "test_benches": meta_coll.distinct("test_bench", query, maxTimeMS=15000),
-            "build_types": meta_coll.distinct("build_type", query, maxTimeMS=15000)
-        }
+    # 2. Enterprise Fallback: Build cache dynamically if missing
+    try:
+        logger.info("[pipeline_mongo] Building hierarchy cache dynamically from MongoDB...")
+        
+        # We reuse the existing `meta_coll` connection defined at the top of the file
+        cursor = meta_coll.find({}, {
+            "region": 1, "customer": 1, "project": 1, "product": 1, "test_bench": 1, "integration_branch": 1, "_id": 0
+        })
+        
+        unique_tuples = set()
+        for doc in cursor:
+            reg = str(doc.get("region", "")).strip().upper()
+            if reg in ["EU", "EUROPE"]: reg = "EU"
+            elif reg in ["NA", "NORTHAMERICA", "NORTH AMERICA", "USA"]: reg = "NA"
+            elif reg in ["AP", "ASIAPACIFIC", "ASIA PACIFIC", "ASIA", "INDIA"]: reg = "AP"
+            elif "MITSUBISHI" in reg: reg = "MITSUBISHI"
+            else: reg = reg or "OTHER"
+
+            cust = str(doc.get("customer", "")).strip().upper()
+            proj = str(doc.get("project", "")).strip()
+            if proj.lower().startswith("project:"): proj = proj[8:].strip()
+            
+            prod = str(doc.get("product", "")).strip().upper()
+            bench = str(doc.get("test_bench", "")).strip()
+            branch = str(doc.get("integration_branch", "")).strip()
+
+            # Safely capture customers even if project/product fields are blank in MongoDB
+            if cust and cust != "NONE":
+                unique_tuples.add((
+                    reg, 
+                    cust, 
+                    proj if proj else "N/A", 
+                    prod if prod else "N/A", 
+                    bench if bench else "N/A", 
+                    branch if branch else "N/A"
+                ))
+
+        hierarchy = [
+            {"region": t[0], "customer": t[1], "project": t[2], "product": t[3], "test_bench": t[4], "integration_branch": t[5]}
+            for t in sorted(unique_tuples)
+        ]
+
+        # Save the new cache file automatically so the next API call is instant
+        os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
+        with open(CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(hierarchy, f)
+
+        return {"hierarchy": hierarchy, "regions": ["AP", "EU", "NA", "MITSUBISHI"]}
+        
     except PyMongoError as e:
-        logger.error(f"[pipeline_mongo] Error fetching filter options: {e}", exc_info=True)
-        return {"projects": [], "customers": [], "products": [], "regions": [], "domains": [], "locations": [], "test_benches": [], "build_types": []}
+        logger.error(f"[pipeline_mongo] Error building hierarchy: {e}", exc_info=True)
+        return {"hierarchy": [], "regions": ["AP", "EU", "NA", "MITSUBISHI"]}
