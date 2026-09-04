@@ -38,3 +38,5 @@ starlette-context
 
 # local llm access gpu
 # pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/vulkan --trusted-host pypi.org --trusted-host files.pythonhosted.org --trusted-host abetlen.github.io --force-reinstall --no-cache-dir --only-binary=llama-cpp-python
+
+pytest
