@@ -81,4 +81,4 @@ uvicorn backend.main:app --host 0.0.0.0 --port 8000
 
 ### Step 3: Verify Connection
 1. Open the Next.js frontend in your browser.
-2. The "Local LLaMA Ready" status indicator in the top right corner of the dashboard will automatically ping your colleague's PC. If it glows green, the pipeline has successfully bridged the network and is utilizing their GPU.
+2. The "Local LLaMA Ready" status indicator in the top right corner of the dashboard will automatically ping your colleague's PC. If it glows green, the pipeline has successfully bridged the network and is utilizing their GPU..
